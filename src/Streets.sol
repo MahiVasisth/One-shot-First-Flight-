@@ -7,11 +7,12 @@ import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
 contract Streets is IERC721Receiver {
     // Struct to hold staking information
+ // @audit-notes: struct for startTime and owner address
     struct Stake {
         uint256 startTime;
         address owner;
     }
-
+ // @audit- map tokenid to stake
     mapping(uint256 tokenId => Stake stake) public stakes;
 
     // ERC721 token contract
@@ -28,22 +29,29 @@ contract Streets is IERC721Receiver {
     }
 
     // Stake tokens by transferring them to this contract
+    // @audit: for staking the token
     function stake(uint256 tokenId) external {
+        // @audit: will store the block.timestamp and msg.sendre to particular token id
         stakes[tokenId] = Stake(block.timestamp, msg.sender);
         emit Staked(msg.sender, tokenId, block.timestamp);
+        // @audit: transfer the tokenId from msg.sender to this address
         oneShotContract.transferFrom(msg.sender, address(this), tokenId);
     }
 
     // Unstake tokens by transferring them back to their owner
     function unstake(uint256 tokenId) external {
+        // @audit: only owner can stake their nft
         require(stakes[tokenId].owner == msg.sender, "Not the token owner");
+        // @audit: duration is reset
         uint256 stakedDuration = block.timestamp - stakes[tokenId].startTime;
+        // @audit: daysStaked is the stakeduration
         uint256 daysStaked = stakedDuration / 1 days;
 
         // Assuming RapBattle contract has a function to update metadata properties
         IOneShot.RapperStats memory stakedRapperStats = oneShotContract.getRapperStats(tokenId);
-
+       // external event called
         emit Unstaked(msg.sender, tokenId, stakedDuration);
+        // @audit: staked tokenId is deleted
         delete stakes[tokenId]; // Clear staking info
 
         // Apply changes based on the days staked
@@ -65,7 +73,8 @@ contract Streets is IERC721Receiver {
         }
 
         // Only call the update function if the token was staked for at least one day
-        if (daysStaked >= 1) {
+           // @audit: if daystaked greater then one then we have to update
+           if (daysStaked >= 1) {
             oneShotContract.updateRapperStats(
                 tokenId,
                 stakedRapperStats.weakKnees,

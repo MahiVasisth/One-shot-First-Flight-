@@ -25,7 +25,7 @@ contract RapBattleTest is Test {
         user = makeAddr("Alice");
         challenger = makeAddr("Slim Shady");
 
-        oneShot.setStreetsContract(address(streets));
+        oneShot.setStreetsContract(address(streets),address(rapBattle));
         cred.setStreetsContract(address(streets));
     }
 
@@ -36,6 +36,7 @@ contract RapBattleTest is Test {
         _;
     }
 
+    
     modifier twoSkilledRappers() {
         vm.startPrank(user);
         oneShot.mintRapper();
@@ -53,13 +54,94 @@ contract RapBattleTest is Test {
 
         vm.startPrank(user);
         streets.unstake(0);
+        console.log("balance of the user is",cred.balanceOf(address(user)));
+   
         vm.stopPrank();
+    
         vm.startPrank(challenger);
         streets.unstake(1);
         vm.stopPrank();
         _;
     }
+    modifier chSkilledRappers() {
+        vm.startPrank(user);
+        oneShot.mintRapper();
+        oneShot.approve(address(streets), 0);
+        streets.stake(0);
+        vm.stopPrank();
 
+        vm.startPrank(user);
+        oneShot.mintRapper();
+        oneShot.approve(address(streets), 1);
+        streets.stake(1);
+        vm.stopPrank();
+
+        vm.warp(12 days + 1);
+
+        vm.startPrank(user);
+        streets.unstake(0);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        streets.unstake(1);
+        vm.stopPrank();
+        _;
+    }
+
+ 
+    modifier foraudit() {
+        vm.startPrank(user);
+        for(uint256 i=0;i<200;i++){
+        oneShot.mintRapper();
+        }
+        oneShot.approve(address(streets), 99);
+        streets.stake(99);
+        vm.stopPrank();
+
+        vm.startPrank(challenger);
+        oneShot.mintRapper();
+        oneShot.approve(address(streets), 100);
+        streets.stake(100);
+        vm.stopPrank();
+
+        vm.warp(4 days + 1);
+
+        vm.startPrank(user);
+        streets.unstake(99);
+        vm.stopPrank();
+        vm.warp(1 days );
+
+        vm.startPrank(challenger);
+        streets.unstake(100);
+        vm.stopPrank();
+        _;
+    }
+
+    function testcanstakeagain() public twoSkilledRappers{
+     vm.startPrank(user);
+     oneShot.approve(address(streets), 0);
+     streets.stake(0);
+      vm.stopPrank();
+      vm.warp(4 days + 1);
+
+      vm.startPrank(user);
+      streets.unstake(0);
+      vm.stopPrank();
+      console.log("balance of the user is",cred.balanceOf(address(user)));
+      vm.startPrank(user);
+      oneShot.approve(address(streets), 0);
+      streets.stake(0);
+       vm.stopPrank();
+      
+      vm.warp(4 days + 1);
+ 
+      vm.startPrank(user);
+    
+       streets.unstake(0);
+       vm.stopPrank();
+       console.log("balance of the user is",cred.balanceOf(address(user)));
+     
+    }
     // Test that a user can mint a rapper
     function testMintRapper() public {
         address testUser = makeAddr("Bob");
@@ -67,7 +149,7 @@ contract RapBattleTest is Test {
         oneShot.mintRapper();
         assert(oneShot.ownerOf(0) == testUser);
     }
-
+   
     // Test that only the streets contract can update rapper stats
     function testAccessControlOnUpdateRapperStats() public mintRapper {
         vm.prank(user);
@@ -79,7 +161,7 @@ contract RapBattleTest is Test {
     function testAccessControlOnSetStreetsContract() public {
         vm.prank(user);
         vm.expectRevert();
-        oneShot.setStreetsContract(address(streets));
+        oneShot.setStreetsContract(address(streets),address(rapBattle));
     }
 
     // test getRapperStats
@@ -149,6 +231,14 @@ contract RapBattleTest is Test {
         assert(stats.calmAndReady == true);
         assert(stats.battlesWon == 0);
     }
+    function testcheckstatus(uint256 i) public {
+    stats = oneShot.getRapperStats(i);
+    assert(stats.weakKnees == false);
+    assert(stats.heavyArms == false);
+    assert(stats.spaghettiSweater == false);
+    assert(stats.calmAndReady == true);
+    assert(stats.battlesWon == 0);
+    }
 
     // Test that a user can go on stage
     function testGoOnStage() public mintRapper {
@@ -199,26 +289,91 @@ contract RapBattleTest is Test {
         oneShot.approve(address(rapBattle), 0);
         cred.approve(address(rapBattle), 3);
         console.log("User allowance before battle:", cred.allowance(user, address(rapBattle)));
+        console.log("Balance of defender before battle",cred.balanceOf(user));
+             
         rapBattle.goOnStageOrBattle(0, 3);
+        console.log("Balance of defender after battle",cred.balanceOf(user));
+       
         vm.stopPrank();
-
+    
         vm.startPrank(challenger);
         oneShot.approve(address(rapBattle), 1);
         cred.approve(address(rapBattle), 3);
         console.log("User allowance before battle:", cred.allowance(challenger, address(rapBattle)));
-
+        console.log("Balance of challenger before battle",cred.balanceOf(challenger));
         // Change the block number so we get different RNG
         vm.roll(randomBlock);
         vm.recordLogs();
         rapBattle.goOnStageOrBattle(1, 3);
+        console.log("Balance of challenger after battle",cred.balanceOf(challenger));
+      
         vm.stopPrank();
 
         Vm.Log[] memory entries = vm.getRecordedLogs();
         // Convert the event bytes32 objects -> address
         address winner = address(uint160(uint256(entries[0].topics[2])));
         assert(cred.balanceOf(winner) == 7);
+        console.log("winner is" , winner);
     }
-
+        function testsameusercanbeboth(uint256 randomBlock) public chSkilledRappers {
+            vm.startPrank(user);
+            oneShot.approve(address(rapBattle), 0);
+            cred.approve(address(rapBattle), 3);
+            console.log("User allowance before battle:", cred.allowance(user, address(rapBattle)));
+            console.log("Balance of defender before battle",cred.balanceOf(user));
+           
+            rapBattle.goOnStageOrBattle(0, 3);
+            console.log("Balance of defender after battle",cred.balanceOf(user));
+           
+            vm.stopPrank();
+    
+            vm.startPrank(user);
+            oneShot.approve(address(rapBattle), 1);
+            cred.approve(address(rapBattle), 3);
+            console.log("User allowance before battle:", cred.allowance(user, address(rapBattle)));
+            console.log("Balance of challenger before battle",cred.balanceOf(user));
+            // Change the block number so we get different RNG
+            vm.roll(randomBlock);
+            vm.recordLogs();
+            rapBattle.goOnStageOrBattle(1, 3);
+            console.log("Balance of challenger after battle",cred.balanceOf(user));
+          
+            vm.stopPrank();
+    
+            Vm.Log[] memory entries = vm.getRecordedLogs();
+            // Convert the event bytes32 objects -> address
+            address winner = address(uint160(uint256(entries[0].topics[2])));
+            assert(cred.balanceOf(winner) == 7);
+            console.log("winner is" , winner);
+            }
+       
+        function testdefenderwin(uint256 randomBlock) public foraudit {
+            vm.startPrank(user);
+            oneShot.approve(address(rapBattle), 99);
+            cred.approve(address(rapBattle), 3);
+            console.log("User allowance before battle:", cred.allowance(user, address(rapBattle)));
+            rapBattle.goOnStageOrBattle(99, 3);
+            vm.stopPrank();
+    
+            vm.startPrank(challenger);
+            oneShot.approve(address(rapBattle), 100);
+            cred.approve(address(rapBattle), 6);
+            console.log("User allowance before battle:", cred.allowance(challenger, address(rapBattle)));
+            // cred.approve(address(user), 3);
+            
+            // Change the block number so we get different RNG
+            vm.roll(randomBlock);
+            vm.recordLogs();
+            rapBattle.goOnStageOrBattle(100, 3);
+            vm.stopPrank();
+    
+            Vm.Log[] memory entries = vm.getRecordedLogs();
+            // Convert the event bytes32 objects -> address
+            address winner = address(uint160(uint256(entries[0].topics[2])));
+            // assert(cred.balanceOf(winner) == 10);
+            console.log("winner is" , winner);
+              }
+       
     // Test that the defender's NFT is returned to them
     function testDefendersNftReturned() public twoSkilledRappers {
         vm.startPrank(user);
@@ -236,6 +391,7 @@ contract RapBattleTest is Test {
 
         assert(oneShot.ownerOf(0) == address(user));
     }
+    
 
     // test getRapperSkill
     function testGetRapperSkill() public mintRapper {
@@ -259,4 +415,31 @@ contract RapBattleTest is Test {
                 == bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"))
         );
     }
-}
+    /*function testrandom(uint256 randomBlock) public twoSkilledRappers {
+        vm.startPrank(user);
+        oneShot.approve(address(rapBattle), 0);
+        cred.approve(address(rapBattle), 3);
+             
+        // rapBattle.goOnStageOrBattle(0, 3);
+        
+        vm.stopPrank();
+    
+        vm.startPrank(challenger);
+        oneShot.approve(address(rapBattle), 1);
+        cred.approve(address(rapBattle), 3);
+        // Change the block number so we get different RNG
+        vm.roll(randomBlock);
+        vm.recordLogs();
+        rapBattle.goOnStageOrBattle(1, 3);
+        console.log("Balance of challenger after battle",cred.balanceOf(challenger));
+      
+        vm.stopPrank();
+
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        // Convert the event bytes32 objects -> address
+        address winner = address(uint160(uint256(entries[0].topics[2])));
+        assert(cred.balanceOf(winner) == 7);
+        console.log("winner is" , winner);
+    }*/
+
+       }
